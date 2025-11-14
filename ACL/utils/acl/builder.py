@@ -9,7 +9,7 @@ from django.core.cache import cache
 from utils.acl.engine import ACLDecisionEngine
 from utils.models import Endpoint, MethodEncoding
 
-
+# TODO : remove token from cache and read from permission
 def _token_cache_key(token: str) -> str:
     digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
     return f"acl:routes:{digest}"
