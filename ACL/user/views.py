@@ -1,10 +1,11 @@
 from rest_framework import permissions, status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response  # type: ignore
 from rest_framework.views import APIView  # type: ignore
 from rest_framework.viewsets import ModelViewSet  # type: ignore
 
-from user.authentication_user import JWTAuthentication
+from django.conf import settings
 from user.models import User
 from user.serializers import StaffLoginSerializer, UserLoginSerializer, UserSerializer
 from utils.acl.metrics import increment as metric_increment
@@ -14,7 +15,8 @@ from utils.acl.throttle import LoginAttemptLimiter
 class UserViewSet(ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    authentication_classes = [JWTAuthentication]
+    # Use session auth for HTTP by default
+    authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
 
@@ -24,13 +26,14 @@ class UserLoginAPIView(APIView):
     def post(self, request, *args, **kwargs):
         serializer = UserLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        return Response(
-            {
-                "access": serializer.validated_data["access_token"],
-                "user_id": serializer.validated_data["user"].id,
-            },
-            status=status.HTTP_200_OK,
-        )
+        user = serializer.validated_data["user"]
+        # Session-only flow: store user id in session; don't return token
+        if getattr(settings, "ADMIN_SESSION_ONLY_AUTH", True):
+            request.session["user_id"] = user.id
+            request.session.modified = True
+            return Response({"user_id": user.id}, status=status.HTTP_200_OK)
+        # Fallback: JWT transient
+        return Response({"access": serializer.validated_data["access_token"], "user_id": user.id}, status=status.HTTP_200_OK)
 
 
 class StaffLoginAPIView(APIView):
@@ -62,12 +65,12 @@ class StaffLoginAPIView(APIView):
         metric_increment("admin_login_success_total")
         metric_increment("admin_login_routes_generated_total", len(serializer.validated_data.get("routes", [])))
 
-        return Response(
-            {
-                "access": serializer.validated_data["access_token"],
-                "staff_id": serializer.validated_data["staff"].id,
-                "expires_at": serializer.validated_data["expires_at"],
-                "routes": serializer.validated_data["routes"],
-            },
-            status=status.HTTP_200_OK,
-        )
+        staff = serializer.validated_data["staff"]
+        routes = serializer.validated_data.get("routes", [])
+        # Session-only flow: store staff id in session; don't return token
+        if getattr(settings, "ADMIN_SESSION_ONLY_AUTH", True):
+            request.session["admin_staff_id"] = staff.id
+            request.session.modified = True
+            return Response({"staff_id": staff.id, "routes": routes}, status=status.HTTP_200_OK)
+        # Fallback: JWT transient
+        return Response({"access": serializer.validated_data["access_token"], "staff_id": staff.id, "expires_at": serializer.validated_data["expires_at"], "routes": routes}, status=status.HTTP_200_OK)

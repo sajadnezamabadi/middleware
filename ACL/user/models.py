@@ -27,6 +27,14 @@ class Team(BaseIDModel, BaseModel, BaseActiveModel):
 
 
 class Staff(BaseIDModel, BaseModel, BaseActiveModel):
+    class StaffManager(models.Manager):
+        def create_user(self, username: str, password: str | None = None, **extra_fields):
+            staff = self.model(username=username, **extra_fields)
+            if password:
+                staff.set_password(password)
+            staff.save(using=self._db)
+            return staff
+
     username = models.CharField(max_length=50, unique=True, verbose_name="Username", db_index=True)
     password = models.CharField(max_length=128, verbose_name="Password")
     first_name = models.CharField(max_length=50, null=True, blank=True, verbose_name="First name", db_index=True)
@@ -43,7 +51,10 @@ class Staff(BaseIDModel, BaseModel, BaseActiveModel):
     role = models.CharField(
         max_length=50, null=True, blank=True, verbose_name="Role", db_index=True, choices=RoleChoices.choices
     )
+    last_login = models.DateTimeField(null=True, blank=True, verbose_name="Last login")
     acl = GenericRelation(Acl, related_query_name="staffs", related_name="staffs")
+
+    objects = StaffManager()
 
     def set_password(self, raw_password: str) -> None:
         self.password = make_password(raw_password)

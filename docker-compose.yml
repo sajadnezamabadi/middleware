@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aclcore_app
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      # Django / App
+      DJANGO_DEBUG: "True"
+      DJANGO_ALLOWED_HOSTS: "*"
+      DJANGO_SESSION_ENGINE: "django.contrib.sessions.backends.cache"
+      ACLCORE_BYPASS_PREFIXES: "/health,/static,/media,/admin"
+      # Database
+      DB_ENGINE: "django.db.backends.postgresql_psycopg2"
+      DB_NAME: "auth"
+      DB_USER: "postgres"
+      DB_PASSWORD: "postgres"
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      # Redis
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      REDIS_USERNAME: ""
+      REDIS_PASSWORD: ""
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ACL/.env:/app/ACL/.env:ro
+
+  postgres:
+    image: postgres:15
+    container_name: aclcore_postgres
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: aclcore_redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+volumes:
+  pgdata:
+
+

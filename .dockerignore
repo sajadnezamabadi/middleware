@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.Python
+env/
+venv/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+node_modules/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Local files
+ACL/.env
+

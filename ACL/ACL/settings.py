@@ -14,6 +14,7 @@ from datetime import timedelta
 from pathlib import Path
 import os
 import importlib
+import sys
 
 
 load_dotenv = lambda *_args, **_kwargs: False  # type: ignore
@@ -48,21 +49,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'aclcore',
     'base',
     'user',
     'utils',
 ]
 
-MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'utils.acl.middleware.AdminACLMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-]
+from ACL.middlewares_config import MIDDLEWARE
 
 ROOT_URLCONF = 'ACL.urls'
 
@@ -124,6 +117,24 @@ CACHES = {
     }
 }
 
+# Use in-memory cache during tests unless explicitly overridden
+if "test" in sys.argv and os.getenv("USE_REDIS_IN_TESTS", "").lower() not in {"1", "true", "yes"}:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "acl-test-cache",
+            "TIMEOUT": None,
+        }
+    }
+
+# ACLCore defaults
+ACLCORE_DEFAULT_APPLICATION = os.getenv("ACLCORE_DEFAULT_APPLICATION", None)
+ACLCORE_CACHE_TTL_SECONDS = int(os.getenv("ACLCORE_CACHE_TTL_SECONDS", "3600"))
+ACLCORE_BYPASS_PREFIXES = [p.strip() for p in os.getenv("ACLCORE_BYPASS_PREFIXES", "/health,/static,/media,/admin").split(",") if p.strip()]
+ACLCORE_USER_ID_HEADER = os.getenv("ACLCORE_USER_ID_HEADER", "HTTP_X_USER_ID")
+ACLCORE_APPLICATION_HEADER = os.getenv("ACLCORE_APPLICATION_HEADER", "HTTP_X_ACL_APP")
+ACLCORE_LOG_SAMPLING_RATE = float(os.getenv("ACLCORE_LOG_SAMPLING_RATE", "1.0"))
+
 SESSION_ENGINE = os.getenv("DJANGO_SESSION_ENGINE", "django.contrib.sessions.backends.cache")
 SESSION_CACHE_ALIAS = "default"
 
@@ -142,6 +153,9 @@ ADMIN_RATE_LIMIT_REQUESTS = int(os.getenv("ADMIN_RATE_LIMIT_REQUESTS", "180"))
 ADMIN_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("ADMIN_RATE_LIMIT_WINDOW_SECONDS", "60"))
 
 ACL_METRIC_DEFAULT_TTL = int(os.getenv("ACL_METRIC_DEFAULT_TTL", "3600"))
+
+# Auth strategy flag (Session-only by default)
+ADMIN_SESSION_ONLY_AUTH = os.getenv("ADMIN_SESSION_ONLY_AUTH", "True").lower() in {"1", "true", "yes"}
 
 
 AUTH_PASSWORD_VALIDATORS = [

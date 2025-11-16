@@ -37,7 +37,7 @@ class MethodEncoding(BaseModel):
 class ACLRule(BaseIDModel, BaseModel):
     endpoint = models.ForeignKey(Endpoint, on_delete=models.CASCADE, related_name="acl_rules")
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        "user.Staff",
         on_delete=models.CASCADE,
         related_name="acl_rules",
         null=True,

@@ -1,11 +1,12 @@
 from django.utils import timezone
 from rest_framework import serializers  # type: ignore
 
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from user.authentication_user import create_access_token
 from user.authentication_staff import create_access_token as create_staff_access_token
 from user.models import Staff, User
-from utils.acl import build_routes_for_token
-from django.conf import settings
+from utils.acl import build_routes_for_staff
 from utils.messages import ERROR_INVALID_CREDENTIALS, ERROR_PASSWORD_REQUIRED
 
 
@@ -52,22 +53,30 @@ class UserLoginSerializer(serializers.Serializer):
     def validate(self, attrs):
         username = attrs.get("username")
         password = attrs.get("password")
+        UserModel = get_user_model()
         try:
-            user = User.objects.get(username=username, is_active=True)
-        except User.DoesNotExist as exc:
+            user = UserModel.objects.get(username=username, is_active=True)
+        except UserModel.DoesNotExist as exc:
             raise serializers.ValidationError({"username": ERROR_INVALID_CREDENTIALS}) from exc
 
         if not user.check_password(password):
             raise serializers.ValidationError({"password": ERROR_INVALID_CREDENTIALS})
 
         now = timezone.now()
-        if user.first_login is None:
-            user.first_login = now
-        user.last_login = now
-        user.save(update_fields=["first_login", "last_login"])
+        update_fields = []
+        if hasattr(user, "first_login"):
+            if getattr(user, "first_login") is None:
+                setattr(user, "first_login", now)
+                update_fields.append("first_login")
+        if hasattr(user, "last_login"):
+            setattr(user, "last_login", now)
+            update_fields.append("last_login")
+        if update_fields:
+            user.save(update_fields=update_fields)
 
         attrs["user"] = user
-        attrs["access_token"] = create_access_token(str(user.pk))
+        if not getattr(settings, "ADMIN_SESSION_ONLY_AUTH", True):
+            attrs["access_token"] = create_access_token(str(user.pk))
         return attrs
 
 
@@ -91,12 +100,13 @@ class StaffLoginSerializer(serializers.Serializer):
         staff.last_login = now
         staff.save(update_fields=["last_login"])
 
-        token = create_staff_access_token(str(staff.pk))
-        expires_at = now + settings.JWT_ACCESS_TOKEN_LIFETIME
-        routes = build_routes_for_token(staff, token)
+        routes = build_routes_for_staff(staff)
 
         attrs["staff"] = staff
-        attrs["access_token"] = token
-        attrs["expires_at"] = expires_at
         attrs["routes"] = routes
+        if not getattr(settings, "ADMIN_SESSION_ONLY_AUTH", True):
+            token = create_staff_access_token(str(staff.pk))
+            expires_at = now + settings.JWT_ACCESS_TOKEN_LIFETIME
+            attrs["access_token"] = token
+            attrs["expires_at"] = expires_at
         return attrs
