@@ -8,8 +8,7 @@ from rest_framework.viewsets import ModelViewSet  # type: ignore
 from django.conf import settings
 from user.models import User
 from user.serializers import StaffLoginSerializer, UserLoginSerializer, UserSerializer
-from utils.acl.metrics import increment as metric_increment
-from utils.acl.throttle import LoginAttemptLimiter
+from aclcore.services import increment as metric_increment, LoginAttemptLimiter
 
 
 class UserViewSet(ModelViewSet):

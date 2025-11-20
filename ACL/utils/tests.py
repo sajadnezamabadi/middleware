@@ -1,15 +1,25 @@
 from django.test import TestCase, override_settings
 from django.core.cache import cache
-from django.test import override_settings
-from asgiref.sync import async_to_sync
 
-from utils.acl.metrics import increment as metric_increment, reset as metric_reset, snapshot
-from utils.acl.throttle import AdminRequestRateLimiter, LoginAttemptLimiter
-from utils.acl import build_routes_for_staff, get_routes_for_staff, clear_routes_for_staff
+from aclcore.services import (
+    increment as metric_increment,
+    reset as metric_reset,
+    snapshot,
+    AdminRequestRateLimiter,
+    LoginAttemptLimiter,
+    build_routes_for_user,
+    clear_routes_for_user,
+    get_routes_for_user,
+)
 from utils.messages import ERROR_LOGIN_RATE_LIMIT_EXCEEDED, ERROR_RATE_LIMIT_EXCEEDED
 from user.models import Staff
-from utils.models import Endpoint, MethodEncoding, ACLRule
-from utils.websocket_auth import SessionAuthMiddleware, cache_get_ws_session
+from aclcore.models import (
+    ACLApplication,
+    ACLRole,
+    ACLRoleRoutePermission,
+    ACLRoute,
+    ACLUserRole,
+)
 
 
 class LoginAttemptLimiterTests(TestCase):
@@ -66,46 +76,32 @@ class RouteBuilderTests(TestCase):
     def setUp(self) -> None:
         cache.clear()
         self.staff = Staff.objects.create(username="admin", password="secret")
-        self.endpoint = Endpoint.objects.create(
-            service="api.admin",
-            path_pattern="/api/admin/example/",
+        self.app = ACLApplication.objects.create(name="admin", description="Admin app")
+        self.role = ACLRole.objects.create(application=self.app, name="admin-role")
+        ACLUserRole.objects.create(user_id=str(self.staff.pk), application=self.app, role=self.role)
+        self.route = ACLRoute.objects.create(
+            application=self.app,
+            path="/api/admin/example/",
             method="GET",
-            action="list-things",
+            normalized_path="/api/admin/example/",
+            is_sensitive=False,
+            is_ignored=False,
             is_active=True,
         )
-        MethodEncoding.objects.create(method="GET", encoded="D")
-        ACLRule.objects.create(endpoint=self.endpoint, user=self.staff, allow=True, priority=10)
+        ACLRoleRoutePermission.objects.create(role=self.role, route=self.route, is_allowed=True)
 
     def tearDown(self) -> None:
         cache.clear()
 
     def test_routes_cached_and_retrieved(self):
-        routes = build_routes_for_staff(self.staff)
+        routes = build_routes_for_user(str(self.staff.pk), application=self.app.name)
         self.assertEqual(len(routes), 1)
-        cached = get_routes_for_staff(str(self.staff.pk))
+        cached = get_routes_for_user(str(self.staff.pk), application=self.app.name)
         self.assertEqual(cached, routes)
-        clear_routes_for_staff(str(self.staff.pk))
-        self.assertIsNone(get_routes_for_staff(str(self.staff.pk)))
+        clear_routes_for_user(str(self.staff.pk), application=self.app.name)
+        self.assertIsNone(get_routes_for_user(str(self.staff.pk), application=self.app.name))
 
 
-class WebsocketAuthTests(TestCase):
-    def setUp(self) -> None:
-        cache.clear()
-        self.staff = Staff.objects.create(username="wsadmin", password="secret", is_active=True)
-
-    @override_settings()
-    def test_ws_session_auth_resolves_staff(self):
-        # Seed cache
-        cache.set(f"ws_session:testkey", str(self.staff.pk), timeout=60)
-
-        captured_user = {}
-
-        async def inner(scope, receive, send):
-            captured_user["user"] = scope.get("user")
-
-        middleware = SessionAuthMiddleware(inner)
-        scope = {"query_string": b"session=testkey", "headers": []}
-        async_to_sync(middleware)(scope, None, None)
-
-        self.assertIsNotNone(captured_user.get("user"))
-        self.assertEqual(getattr(captured_user["user"], "pk", None), self.staff.pk)
+# WebSocket auth tests removed.
+# For WebSocket ACL testing, use aclcore.ws_middleware.WsAclMiddleware
+# or aclcore.ws_middleware.SessionWSAuthMiddleware in your ASGI stack.

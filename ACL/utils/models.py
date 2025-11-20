@@ -6,6 +6,14 @@ from user.choices import RoleChoices
 
 
 class Endpoint(BaseIDModel, BaseModel, BaseActiveModel):
+    """
+    DEPRECATED: Legacy endpoint registry.
+    New ACL routing lives in `aclcore.models.ACLRoute`.
+
+    Kept only for backwards compatibility with old migrations;
+    should not be used in new code.
+    """
+
     service = models.CharField(max_length=100, db_index=True)
     path_pattern = models.CharField(max_length=300, unique=True, db_index=True)
     method = models.CharField(max_length=16, db_index=True)
@@ -23,6 +31,11 @@ class Endpoint(BaseIDModel, BaseModel, BaseActiveModel):
 
 
 class MethodEncoding(BaseModel):
+    """
+    DEPRECATED: Legacy method encoding for old ACL implementation.
+    Not used by `aclcore` and kept only so old migrations work.
+    """
+
     method = models.CharField(max_length=16, unique=True)
     encoded = models.CharField(max_length=16)
 
@@ -35,6 +48,11 @@ class MethodEncoding(BaseModel):
 
 
 class ACLRule(BaseIDModel, BaseModel):
+    """
+    DEPRECATED: Legacy ACL rule model.
+    Replaced by role/route bindings in `aclcore` (ACLRoleRoutePermission).
+    """
+
     endpoint = models.ForeignKey(Endpoint, on_delete=models.CASCADE, related_name="acl_rules")
     user = models.ForeignKey(
         "user.Staff",

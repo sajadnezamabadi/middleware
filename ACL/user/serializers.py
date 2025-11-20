@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from user.authentication_user import create_access_token
 from user.authentication_staff import create_access_token as create_staff_access_token
 from user.models import Staff, User
-from utils.acl import build_routes_for_staff
+from aclcore.services import build_routes_for_user
 from utils.messages import ERROR_INVALID_CREDENTIALS, ERROR_PASSWORD_REQUIRED
 
 
@@ -100,7 +100,7 @@ class StaffLoginSerializer(serializers.Serializer):
         staff.last_login = now
         staff.save(update_fields=["last_login"])
 
-        routes = build_routes_for_staff(staff)
+        routes = build_routes_for_user(str(staff.pk))
 
         attrs["staff"] = staff
         attrs["routes"] = routes
